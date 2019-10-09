@@ -4,9 +4,9 @@
   "description": "A Probot app",
   "author": "gidsi <gidsi@chaospott.de> (https://spaceapi.io)",
   "license": "ISC",
-  "repository": "https://github.com//spaceapi-github-bot.git",
-  "homepage": "https://github.com//spaceapi-github-bot",
-  "bugs": "https://github.com//spaceapi-github-bot/issues",
+  "repository": "https://github.com/SpaceApi/github-bot.git",
+  "homepage": "https://github.com/SpaceApi/github-bot",
+  "bugs": "https://github.com/SpaceApi/github-bot/issues",
   "keywords": [
     "probot",
     "github",

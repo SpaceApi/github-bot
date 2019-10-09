@@ -5,13 +5,15 @@ const https = require('https')
 const mongoose = require('mongoose')
 const PullRequest = require('./schema')
 
-const mongoUri = `mongodb://${process.env.DB_HOST}/spaceapi`
-mongoose.connect(mongoUri, {
-  user: process.env.DB_USER,
-  pass: process.env.DB_PASS,
-  useUnifiedTopology: true,
-  useNewUrlParser: true
-})
+const connectDb = () => {
+  const mongoUri = `mongodb://${process.env.DB_HOST}/spaceapi`
+  mongoose.connect(mongoUri, {
+    user: process.env.DB_USER,
+    pass: process.env.DB_PASS,
+    useUnifiedTopology: true,
+    useNewUrlParser: true
+  })
+}
 
 const validateSpace = space => {
   return fetch('https://validator.spaceapi.io/v1/validate/', {
@@ -111,7 +113,7 @@ module.exports = app => {
     const status = {
       sha,
       state: 'pending',
-      target_url: `https://spaceapi.io/pullrequest/${pull.number}`,
+      target_url: `https://githubbot.spaceapi.io/pullrequest/${pull.number}`,
       description: 'Checking for added url(s)',
       context: 'Url check'
     }
