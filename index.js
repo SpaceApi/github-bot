@@ -5,15 +5,13 @@ const https = require('https')
 const mongoose = require('mongoose')
 const PullRequest = require('./schema')
 
-const connectDb = () => {
-  const mongoUri = `mongodb://${process.env.DB_HOST}/spaceapi`
-  mongoose.connect(mongoUri, {
-    user: process.env.DB_USER,
-    pass: process.env.DB_PASS,
-    useUnifiedTopology: true,
-    useNewUrlParser: true
-  })
-}
+const mongoUri = `mongodb://${process.env.DB_HOST}/spaceapi`
+mongoose.connect(mongoUri, {
+  user: process.env.DB_USER,
+  pass: process.env.DB_PASS,
+  useUnifiedTopology: true,
+  useNewUrlParser: true
+})
 
 const validateSpace = space => {
   return fetch('https://validator.spaceapi.io/v1/validate/', {
