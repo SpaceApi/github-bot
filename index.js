@@ -1,7 +1,6 @@
+const SpaceApiValidator = require('space_api_validator')
 const fetch = require('node-fetch')
-const { Headers } = require('node-fetch')
 const uuidv4 = require('uuid/v4')
-const https = require('https')
 const mongoose = require('mongoose')
 const PullRequest = require('./schema')
 
@@ -21,8 +20,20 @@ const validateSpace = space => {
   })
     .then(res => res.json())
 }
-const fetchAndValidateSpace = url => {
-  const origin = 'https://githubbot.spaceapi.io'
+const fetchAndValidateSpace = urlResult => {
+  let apiInstance = new SpaceApiValidator.V2Api()
+  let validateUrlV2 = new SpaceApiValidator.ValidateUrlV2(urlResult.url)
+  apiInstance.v2ValidateURLPost(validateUrlV2, (error, data, response) => {
+    if (error) {
+      console.error(error)
+      throw new Error('validator error')
+    }
+
+    urlResult.result = data
+    return new Promise(data.valid)
+  })
+
+/* const origin = 'https://githubbot.spaceapi.io'
   const options = {
     redirect: 'manual',
     headers: new Headers({
@@ -57,7 +68,8 @@ const fetchAndValidateSpace = url => {
     .then(res => {
       const newLocation = res.headers.get('location')
       if (!spaceResult.https.isHttps) {
-        spaceResult.https.httpsForward = newLocation !== null && newLocation.startsWith('https')
+        spaceResult.https.httpsForward = newLocation !== null &&
+          newLocation.startsWith('https')
       }
 
       return newLocation
@@ -87,6 +99,32 @@ const fetchAndValidateSpace = url => {
         ...result,
         ...spaceResult
       }
+    }) */
+}
+
+async function createPullRequestStatus (pullRequest, context) {
+  const status = {
+    sha: pullRequest.sha,
+    state: 'pending',
+    target_url: `https://githubbot.spaceapi.io/pullrequest/${pullRequest.number}`,
+    description: 'Checking for added url(s)',
+    context: 'Url check'
+  }
+  await context.github.repos.createStatus(context.repo(status))
+    .then(res => {
+      return Promise.all(pullRequest.url.map(val => {
+        return fetchAndValidateSpace(val)
+      }))
+    })
+    .then(res => {
+      context.github.repos.createStatus(context.repo({
+        ...status,
+        state: res.reduce((pre, cur) => pre && cur, true) ? 'success'
+          : 'failure'
+      }))
+
+      // pullRequest.url = res
+      pullRequest.save()
     })
 }
 
@@ -95,29 +133,21 @@ module.exports = app => {
   const router = app.route('/spaceapi')
 
   router.get('/pullrequest/:number(\\d+)', (req, res) => {
-    PullRequest.find({ pullRequestNumber: req.params.number }, { '_id': 0, '__v': 0, 'url._id': 0 }).exec().then(result => {
+    PullRequest.find({ pullRequestNumber: req.params.number },
+      { '_id': 0, '__v': 0, 'url._id': 0 }).exec().then(result => {
       res.send(result)
     })
   })
 
   app.on('pull_request', async context => {
-    const pullRequest = new PullRequest({ runId: uuidv4() })
     const { sha } = context.payload.pull_request.head
+    const pullRequest = new PullRequest({ runId: uuidv4(), sha })
     const pull = context.issue()
     app.log(`start checking pull request ${pull.number}`)
     pullRequest.pullRequestNumber = pull.number
     await pullRequest.save()
 
-    const status = {
-      sha,
-      state: 'pending',
-      target_url: `https://githubbot.spaceapi.io/pullrequest/${pull.number}`,
-      description: 'Checking for added url(s)',
-      context: 'Url check'
-    }
-    await context.github.repos.createStatus(context.repo(status))
-
-    context.github.pullRequests.listFiles(pull)
+    await context.github.pullRequests.listFiles(pull)
       .then(changedFiles => {
         return Promise.all(changedFiles.data.map(data => {
           if (data.filename === 'directory.json') {
@@ -125,7 +155,6 @@ module.exports = app => {
               return match.match(/https?[^"]*/gi).map(url => url)
             })
               .flat()
-              .map(fetchAndValidateSpace)
           }
           return null
         })
@@ -133,14 +162,15 @@ module.exports = app => {
           .flat())
       })
       .then(res => {
-        context.github.repos.createStatus(context.repo({
-          ...status,
-          state: res.reduce((pre, cur) => pre && cur.valid, true) ? 'success' : 'failure'
-        }))
-
-        pullRequest.url = res
-        pullRequest.save()
-        app.log(`done checking pull request ${pull.number}`)
+        res.forEach(url => {
+          pullRequest.url.push({
+            url
+          })
+        })
       })
+
+    // await console.log(pullRequest)
+    await createPullRequestStatus(pullRequest, context)
+    app.log(`done checking pull request ${pull.number}`)
   })
 }
