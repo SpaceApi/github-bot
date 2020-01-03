@@ -1,7 +1,5 @@
-const fetch = require('node-fetch')
-const { Headers } = require('node-fetch')
+const SpaceApiValidator = require('@spaceapi/validator-client')
 const uuidv4 = require('uuid/v4')
-const https = require('https')
 const mongoose = require('mongoose')
 const PullRequest = require('./schema')
 
@@ -13,80 +11,43 @@ mongoose.connect(mongoUri, {
   useNewUrlParser: true
 })
 
-const validateSpace = space => {
-  return fetch('https://validator.spaceapi.io/v1/validate/', {
-    method: 'post',
-    body: JSON.stringify({ data: JSON.stringify(space) }),
-    headers: { 'Content-Type': 'application/json' }
+const validateSpaceUrl = url => {
+  let apiInstance = new SpaceApiValidator.V2Api()
+  let validateUrlV2 = new SpaceApiValidator.ValidateUrlV2(url)
+  return apiInstance.v2ValidateURLPost(validateUrlV2).then(res => {
+    return {
+      url,
+      result: res
+    }
   })
-    .then(res => res.json())
 }
-const fetchAndValidateSpace = url => {
-  const origin = 'https://githubbot.spaceapi.io'
-  const options = {
-    redirect: 'manual',
-    headers: new Headers({
-      origin
-    })
+
+async function createPullRequestStatus (pullRequest, context) {
+  const status = {
+    sha: pullRequest.sha,
+    state: 'pending',
+    target_url: `https://githubbot.spaceapi.io/pullrequest/${pullRequest.pullRequestNumber}`,
+    description: 'Checking for added url(s)',
+    context: 'Url check'
   }
 
-  const spaceResult = {
-    cors: false,
-    reachable: true,
-    https: {
-      isHttps: false
-    }
-  }
-  if (url.startsWith('https')) {
-    spaceResult.https = {
-      isHttps: url.startsWith('https'),
-      certValid: true
-    }
-  }
-
-  return fetch(url, options)
-    .catch(err => {
-      if (err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') {
-        spaceResult.https.certValid = false
-        const agent = new https.Agent({
-          rejectUnauthorized: false
-        })
-        return fetch(url, { agent, ...options })
-      }
-    })
+  await context.github.repos.createStatus(context.repo(status))
     .then(res => {
-      const newLocation = res.headers.get('location')
-      if (!spaceResult.https.isHttps) {
-        spaceResult.https.httpsForward = newLocation !== null && newLocation.startsWith('https')
-      }
+      context.github.repos.createStatus(context.repo({
+        ...status,
+        state: pullRequest.url.reduce((pre, cur) => pre && cur.result.valid, true) ? 'success'
+          : 'failure'
+      }))
+      pullRequest.save()
+    })
+}
 
-      return newLocation
-        ? fetch(newLocation, options)
-        : res
-    })
+function validatePullRequest (pullRequest) {
+  return Promise.all(pullRequest.url.map(val => validateSpaceUrl(val.url)))
     .then(res => {
-      const allowOrigin = res.headers.get('access-control-allow-origin')
-      spaceResult.cors = allowOrigin === '*' || allowOrigin === origin
-      return res
-    })
-    .then(res => {
-      if (!res.ok) {
-        throw new Error('not reachable')
-      }
-
-      return res
-    })
-    .then(res => res.json())
-    .then(validateSpace)
-    .catch(() => {
-      spaceResult.reachable = false
-    })
-    .then(result => {
-      return {
-        url,
-        ...result,
-        ...spaceResult
-      }
+      pullRequest.url = res
+      pullRequest.save()
+      return pullRequest
     })
 }
 
@@ -95,29 +56,21 @@ module.exports = app => {
   const router = app.route('/spaceapi')
 
   router.get('/pullrequest/:number(\\d+)', (req, res) => {
-    PullRequest.find({ pullRequestNumber: req.params.number }, { '_id': 0, '__v': 0, 'url._id': 0 }).exec().then(result => {
+    PullRequest.find({ pullRequestNumber: req.params.number },
+      { '_id': 0, '__v': 0, 'url._id': 0 }).exec().then(result => {
       res.send(result)
     })
   })
 
   app.on('pull_request', async context => {
-    const pullRequest = new PullRequest({ runId: uuidv4() })
     const { sha } = context.payload.pull_request.head
+    const pullRequest = new PullRequest({ runId: uuidv4(), sha })
     const pull = context.issue()
     app.log(`start checking pull request ${pull.number}`)
     pullRequest.pullRequestNumber = pull.number
     await pullRequest.save()
 
-    const status = {
-      sha,
-      state: 'pending',
-      target_url: `https://githubbot.spaceapi.io/pullrequest/${pull.number}`,
-      description: 'Checking for added url(s)',
-      context: 'Url check'
-    }
-    await context.github.repos.createStatus(context.repo(status))
-
-    context.github.pullRequests.listFiles(pull)
+    await context.github.pullRequests.listFiles(pull)
       .then(changedFiles => {
         return Promise.all(changedFiles.data.map(data => {
           if (data.filename === 'directory.json') {
@@ -125,7 +78,6 @@ module.exports = app => {
               return match.match(/https?[^"]*/gi).map(url => url)
             })
               .flat()
-              .map(fetchAndValidateSpace)
           }
           return null
         })
@@ -133,14 +85,18 @@ module.exports = app => {
           .flat())
       })
       .then(res => {
-        context.github.repos.createStatus(context.repo({
-          ...status,
-          state: res.reduce((pre, cur) => pre && cur.valid, true) ? 'success' : 'failure'
-        }))
-
-        pullRequest.url = res
-        pullRequest.save()
-        app.log(`done checking pull request ${pull.number}`)
+        res.forEach(url => {
+          pullRequest.url.push({
+            url
+          })
+        })
       })
+
+    await validatePullRequest(pullRequest).then(res => {
+      createPullRequestStatus(res, context)
+      app.log(`done checking pull request ${pull.number}`)
+    })
+    // await console.log(pullRequest)
+    // await createPullRequestStatus(pullRequest, context)
   })
 }

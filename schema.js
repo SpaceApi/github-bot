@@ -8,6 +8,7 @@ const PullRequestSchema = new Schema({
     required: true
   },
   pullRequestNumber: Number,
+  sha: String,
   timestamp: {
     type: Date,
     default: Date.now
@@ -15,15 +16,16 @@ const PullRequestSchema = new Schema({
   url: [
     {
       url: String,
-      valid: Boolean,
-      reachable: Boolean,
-      cors: Boolean,
-      https: {
-        certValid: Boolean,
+      result: {
+        valid: Boolean,
         isHttps: Boolean,
-        httpsForward: Boolean
-      },
-      message: String
+        httpsForward: Boolean,
+        reachable: Boolean,
+        cors: Boolean,
+        contentType: Boolean,
+        certValid: Boolean,
+        message: String
+      }
     }
   ]
 })
