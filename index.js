@@ -1,5 +1,4 @@
-const SpaceApiValidator = require('space_api_validator')
-const fetch = require('node-fetch')
+const SpaceApiValidator = require('@spaceapi/validator-client')
 const uuidv4 = require('uuid/v4')
 const mongoose = require('mongoose')
 const PullRequest = require('./schema')
@@ -12,119 +11,43 @@ mongoose.connect(mongoUri, {
   useNewUrlParser: true
 })
 
-const validateSpace = space => {
-  return fetch('https://validator.spaceapi.io/v1/validate/', {
-    method: 'post',
-    body: JSON.stringify({ data: JSON.stringify(space) }),
-    headers: { 'Content-Type': 'application/json' }
-  })
-    .then(res => res.json())
-}
-const fetchAndValidateSpace = urlResult => {
+const validateSpaceUrl = url => {
   let apiInstance = new SpaceApiValidator.V2Api()
-  let validateUrlV2 = new SpaceApiValidator.ValidateUrlV2(urlResult.url)
-  apiInstance.v2ValidateURLPost(validateUrlV2, (error, data, response) => {
-    if (error) {
-      console.error(error)
-      throw new Error('validator error')
+  let validateUrlV2 = new SpaceApiValidator.ValidateUrlV2(url)
+  return apiInstance.v2ValidateURLPost(validateUrlV2).then(res => {
+    return {
+      url,
+      result: res
     }
-
-    urlResult.result = data
-    return new Promise(data.valid)
   })
-
-/* const origin = 'https://githubbot.spaceapi.io'
-  const options = {
-    redirect: 'manual',
-    headers: new Headers({
-      origin
-    })
-  }
-
-  const spaceResult = {
-    cors: false,
-    reachable: true,
-    https: {
-      isHttps: false
-    }
-  }
-  if (url.startsWith('https')) {
-    spaceResult.https = {
-      isHttps: url.startsWith('https'),
-      certValid: true
-    }
-  }
-
-  return fetch(url, options)
-    .catch(err => {
-      if (err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') {
-        spaceResult.https.certValid = false
-        const agent = new https.Agent({
-          rejectUnauthorized: false
-        })
-        return fetch(url, { agent, ...options })
-      }
-    })
-    .then(res => {
-      const newLocation = res.headers.get('location')
-      if (!spaceResult.https.isHttps) {
-        spaceResult.https.httpsForward = newLocation !== null &&
-          newLocation.startsWith('https')
-      }
-
-      return newLocation
-        ? fetch(newLocation, options)
-        : res
-    })
-    .then(res => {
-      const allowOrigin = res.headers.get('access-control-allow-origin')
-      spaceResult.cors = allowOrigin === '*' || allowOrigin === origin
-      return res
-    })
-    .then(res => {
-      if (!res.ok) {
-        throw new Error('not reachable')
-      }
-
-      return res
-    })
-    .then(res => res.json())
-    .then(validateSpace)
-    .catch(() => {
-      spaceResult.reachable = false
-    })
-    .then(result => {
-      return {
-        url,
-        ...result,
-        ...spaceResult
-      }
-    }) */
 }
 
 async function createPullRequestStatus (pullRequest, context) {
   const status = {
     sha: pullRequest.sha,
     state: 'pending',
-    target_url: `https://githubbot.spaceapi.io/pullrequest/${pullRequest.number}`,
+    target_url: `https://githubbot.spaceapi.io/pullrequest/${pullRequest.pullRequestNumber}`,
     description: 'Checking for added url(s)',
     context: 'Url check'
   }
+
   await context.github.repos.createStatus(context.repo(status))
-    .then(res => {
-      return Promise.all(pullRequest.url.map(val => {
-        return fetchAndValidateSpace(val)
-      }))
-    })
     .then(res => {
       context.github.repos.createStatus(context.repo({
         ...status,
-        state: res.reduce((pre, cur) => pre && cur, true) ? 'success'
+        state: pullRequest.url.reduce((pre, cur) => pre && cur.result.valid, true) ? 'success'
           : 'failure'
       }))
-
-      // pullRequest.url = res
       pullRequest.save()
+    })
+}
+
+function validatePullRequest (pullRequest) {
+  return Promise.all(pullRequest.url.map(val => validateSpaceUrl(val.url)))
+    .then(res => {
+      pullRequest.url = res
+      pullRequest.save()
+      return pullRequest
     })
 }
 
@@ -169,8 +92,11 @@ module.exports = app => {
         })
       })
 
+    await validatePullRequest(pullRequest).then(res => {
+      createPullRequestStatus(res, context)
+      app.log(`done checking pull request ${pull.number}`)
+    })
     // await console.log(pullRequest)
-    await createPullRequestStatus(pullRequest, context)
-    app.log(`done checking pull request ${pull.number}`)
+    // await createPullRequestStatus(pullRequest, context)
   })
 }
