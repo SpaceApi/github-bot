@@ -1,5 +1,5 @@
 const SpaceApiValidator = require('@spaceapi/validator-client')
-const uuidv4 = require('uuid/v4')
+const uuid = require('uuid')
 const mongoose = require('mongoose')
 const PullRequest = require('./schema')
 
@@ -12,8 +12,8 @@ mongoose.connect(mongoUri, {
 })
 
 const validateSpaceUrl = url => {
-  let apiInstance = new SpaceApiValidator.V2Api()
-  let validateUrlV2 = new SpaceApiValidator.ValidateUrlV2(url)
+  const apiInstance = new SpaceApiValidator.V2Api()
+  const validateUrlV2 = new SpaceApiValidator.ValidateUrlV2(url)
   return apiInstance.v2ValidateURLPost(validateUrlV2).then(res => {
     return {
       url,
@@ -32,7 +32,7 @@ async function createPullRequestStatus (pullRequest, context) {
   }
 
   await context.github.repos.createStatus(context.repo(status))
-    .then(res => {
+    .then(() => {
       context.github.repos.createStatus(context.repo({
         ...status,
         state: pullRequest.url.reduce((pre, cur) => pre && cur.result.valid, true) ? 'success'
@@ -57,20 +57,20 @@ module.exports = app => {
 
   router.get('/pullrequest/:number(\\d+)', (req, res) => {
     PullRequest.find({ pullRequestNumber: req.params.number },
-      { '_id': 0, '__v': 0, 'url._id': 0 }).exec().then(result => {
+      { _id: 0, __v: 0, 'url._id': 0 }).exec().then(result => {
       res.send(result)
     })
   })
 
   app.on('pull_request', async context => {
     const { sha } = context.payload.pull_request.head
-    const pullRequest = new PullRequest({ runId: uuidv4(), sha })
+    const pullRequest = new PullRequest({ runId: uuid.v4(), sha })
     const pull = context.issue()
     app.log(`start checking pull request ${pull.number}`)
     pullRequest.pullRequestNumber = pull.number
     await pullRequest.save()
 
-    await context.github.pullRequests.listFiles(pull)
+    await context.github.pulls.listFiles(pull)
       .then(changedFiles => {
         return Promise.all(changedFiles.data.map(data => {
           if (data.filename === 'directory.json') {
