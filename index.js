@@ -26,7 +26,7 @@ async function createPullRequestStatus (pullRequest, context) {
   const status = {
     sha: pullRequest.sha,
     state: 'pending',
-    target_url: `https://githubbot.spaceapi.io/pullrequest/${pullRequest.pullRequestNumber}`,
+    target_url: `https://githubbot.spaceapi.community/pullrequest/${pullRequest.pullRequestNumber}`,
     description: 'Checking for added url(s)',
     context: 'Url check'
   }
