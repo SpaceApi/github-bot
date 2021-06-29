@@ -35,7 +35,8 @@ async function createPullRequestStatus (pullRequest, context) {
     .then(() => {
       context.github.repos.createStatus(context.repo({
         ...status,
-        state: pullRequest.url.reduce((pre, cur) => pre && cur.result.valid, true) ? 'success'
+        state: pullRequest.url.reduce((pre, cur) => pre && cur.result.valid, true)
+          ? 'success'
           : 'failure'
       }))
       pullRequest.save()
