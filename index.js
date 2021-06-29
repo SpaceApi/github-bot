@@ -52,9 +52,9 @@ function validatePullRequest (pullRequest) {
     })
 }
 
-module.exports = app => {
+module.exports = (app, { getRouter }) => {
   app.log('app started')
-  const router = app.route('/spaceapi')
+  const router = getRouter('/spaceapi')
 
   router.get('/pullrequest/:number(\\d+)', (req, res) => {
     PullRequest.find({ pullRequestNumber: req.params.number },
