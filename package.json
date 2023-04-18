@@ -22,7 +22,7 @@
   "dependencies": {
     "@spaceapi/validator-client": "^1.2.1",
     "mongoose": "^6.4.6",
-    "node-fetch": "^3.2.3",
+    "node-fetch": "^3.2.10",
     "npm-check-updates": "^12.5.8",
     "probot": "^12.2.2",
     "uuid": "^8.3.2"
