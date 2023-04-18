@@ -23,14 +23,14 @@
     "@spaceapi/validator-client": "^1.2.1",
     "mongoose": "^6.4.6",
     "node-fetch": "^3.2.10",
-    "npm-check-updates": "^12.5.8",
-    "probot": "^12.2.2",
+    "npm-check-updates": "^16.10.8",
+    "probot": "^12.3.0",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
     "jest": "^27.5.1",
     "nock": "^13.2.4",
-    "nodemon": "^2.0.15",
+    "nodemon": "^2.0.22",
     "smee-client": "^1.2.3",
     "standard": "^16.0.4"
   },
