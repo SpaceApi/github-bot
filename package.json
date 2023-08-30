@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@spaceapi/validator-client": "^1.2.1",
-    "mongoose": "^6.11.3",
+    "mongoose": "^6.12.0",
     "node-fetch": "^3.2.10",
     "npm-check-updates": "^16.10.8",
     "probot": "^12.3.0",
