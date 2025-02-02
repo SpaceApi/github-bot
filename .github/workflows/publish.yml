@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - master
-      - chore-github-actions  # TODO: remove before merging
   schedule:
     - cron: "0 5 * * 1"
 
