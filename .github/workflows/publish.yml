@@ -1,0 +1,35 @@
+
+on:
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: "0 5 * * 1"
+
+name: publish
+
+jobs:
+  test:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build github-bot image
+        run: |
+          docker build \
+            --no-cache \
+            --tag ghcr.io/spaceapi/github-bot:latest \
+            --tag ghcr.io/spaceapi/github-bot:$GITHUB_REF_NAME \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            .
+      - name: Publish githhub-bot image
+        run: |
+          docker push -a ghcr.io/spaceapi/github-bot
